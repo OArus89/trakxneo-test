@@ -1,0 +1,4 @@
+report/
+*.out
+*.json
+!config/env.yaml
