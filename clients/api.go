@@ -29,7 +29,7 @@ func NewAPIClient(cfg *config.Config) *APIClient {
 
 // Login authenticates and stores the JWT token for subsequent requests.
 func (c *APIClient) Login(username, password string) error {
-	body := map[string]string{"username": username, "password": password}
+	body := map[string]string{"email": username, "password": password}
 	resp, err := c.post("/api/v1/auth/login", body, false)
 	if err != nil {
 		return fmt.Errorf("login: %w", err)
