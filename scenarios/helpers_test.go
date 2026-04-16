@@ -1,6 +1,8 @@
 package scenarios
 
 import (
+	"encoding/json"
+	"io"
 	"testing"
 	"time"
 
@@ -17,6 +19,7 @@ type testEnv struct {
 	pg        *checks.Postgres
 	ch        *checks.ClickHouse
 	dragonfly *checks.Dragonfly
+	orgID     string // cached first org ID
 }
 
 var env *testEnv
@@ -73,4 +76,9 @@ func waitFor(t *testing.T, timeout time.Duration, fn func() bool) {
 		time.Sleep(500 * time.Millisecond)
 	}
 	t.Fatalf("waitFor timed out after %s", timeout)
+}
+
+// decodeBody decodes JSON response body into target struct.
+func decodeBody(body io.Reader, target any) error {
+	return json.NewDecoder(body).Decode(target)
 }

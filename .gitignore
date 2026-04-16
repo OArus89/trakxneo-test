@@ -5,3 +5,4 @@ report/*.xml
 *.json
 !config/env.yaml
 !report/generate.go
+panel-server

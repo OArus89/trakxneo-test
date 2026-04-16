@@ -1,6 +1,7 @@
 package scenarios
 
 import (
+	"os"
 	"testing"
 	"time"
 
@@ -8,30 +9,27 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestTripLifecycle verifies:
-// 1. Ignition ON + speed → trip starts
-// 2. Drive along a route → trip accumulates distance
-// 3. Ignition OFF + speed=0 → trip ends immediately
-// 4. Trip appears in PG with status=completed
-// 5. Route polyline is archived
 func TestTripLifecycle(t *testing.T) {
 	e := setup(t)
-	imei := "999000000000002"
+
+	imei := os.Getenv("TEST_IMEI_TELTONIKA")
+	if imei == "" {
+		t.Skip("TEST_IMEI_TELTONIKA not set — need a registered device IMEI")
+	}
 
 	session, err := e.gateway.ConnectTeltonika(imei)
 	require.NoError(t, err)
 	defer session.Close()
 
-	// 1. Start engine — ignition ON, speed 0 (cranking)
+	// 1. Ignition ON, speed 0
 	err = session.SendCodec8(25.2000, 55.2700, 0, 0, true, false, 11200, 4100, 200000)
 	require.NoError(t, err)
 	time.Sleep(2 * time.Second)
 
-	// 2. Start moving — speed > 10 km/h triggers trip start
+	// 2. Start moving
 	err = session.SendCodec8(25.2010, 55.2710, 40, 90, true, true, 13800, 4100, 200100)
 	require.NoError(t, err)
 
-	// Wait for trip to start in Dragonfly
 	t.Run("trip_starts", func(t *testing.T) {
 		waitFor(t, 15*time.Second, func() bool {
 			ops, err := e.dragonfly.DeviceOpState(imei)
@@ -44,7 +42,7 @@ func TestTripLifecycle(t *testing.T) {
 		})
 	})
 
-	// 3. Drive a few points to build distance (>1000m for validation)
+	// 3. Drive
 	points := [][4]float64{
 		{25.2020, 55.2720, 60, 90},
 		{25.2030, 55.2740, 65, 85},
@@ -58,17 +56,15 @@ func TestTripLifecycle(t *testing.T) {
 		time.Sleep(2 * time.Second)
 	}
 
-	// Get active trip ID
 	ops, err := e.dragonfly.DeviceOpState(imei)
 	require.NoError(t, err)
 	tripID, _ := ops["active_trip_id"].(string)
 	require.NotEmpty(t, tripID, "should have active trip ID")
 
-	// 4. Stop — ignition OFF, speed 0 → immediate trip end
+	// 4. Stop
 	err = session.SendCodec8(25.2070, 55.2820, 0, 0, false, false, 12400, 4000, 201000)
 	require.NoError(t, err)
 
-	// Wait for trip to complete in PostgreSQL
 	t.Run("trip_completes", func(t *testing.T) {
 		waitFor(t, 20*time.Second, func() bool {
 			trip, err := e.pg.TripByID(tripID)
@@ -84,14 +80,12 @@ func TestTripLifecycle(t *testing.T) {
 		assert.Equal(t, "ignition_off", trip["end_reason"])
 	})
 
-	// 5. Route polyline should be archived
 	t.Run("polyline_archived", func(t *testing.T) {
 		trip, err := e.pg.TripByID(tripID)
 		require.NoError(t, err)
 		assert.True(t, trip["has_polyline"].(bool), "route polyline should be archived")
 	})
 
-	// 6. Trip visible via API
 	t.Run("trip_in_api", func(t *testing.T) {
 		trips, err := e.api.GetTrips(imei)
 		require.NoError(t, err)

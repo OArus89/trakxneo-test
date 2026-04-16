@@ -126,8 +126,10 @@ func handleRun(w http.ResponseWriter, r *http.Request) {
 	}
 	email := r.URL.Query().Get("email")
 	password := r.URL.Query().Get("password")
+	imeiTel := r.URL.Query().Get("imei_tel")
+	imeiRup := r.URL.Query().Get("imei_rup")
 
-	go runTests(host, email, password)
+	go runTests(host, email, password, imeiTel, imeiRup)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"ok": true, "host": host})
@@ -207,7 +209,7 @@ func handleHistoryDetail(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "not found", 404)
 }
 
-func runTests(host, email, password string) {
+func runTests(host, email, password, imeiTel, imeiRup string) {
 	started := time.Now()
 
 	cmd := exec.Command("go", "test", "./scenarios/", "-v", "-timeout=5m", "-count=1", "-json")
@@ -218,6 +220,12 @@ func runTests(host, email, password string) {
 	}
 	if password != "" {
 		env = append(env, "AUTH_PASSWORD="+password)
+	}
+	if imeiTel != "" {
+		env = append(env, "TEST_IMEI_TELTONIKA="+imeiTel)
+	}
+	if imeiRup != "" {
+		env = append(env, "TEST_IMEI_RUPTELA="+imeiRup)
 	}
 	cmd.Env = env
 
@@ -423,13 +431,17 @@ var indexTmpl = template.Must(template.New("index").Parse(`<!DOCTYPE html>
 </div>
 
 <div class="container">
-  <div class="controls">
+  <div class="controls" style="flex-wrap:wrap">
     <label>Target IP</label>
     <input type="text" id="hostInput" value="192.168.1.9" placeholder="192.168.1.9">
     <label>Email</label>
-    <input type="text" id="emailInput" value="admin@admin" placeholder="admin@admin">
+    <input type="text" id="emailInput" value="admin@admin" placeholder="admin@admin" style="width:140px">
     <label>Password</label>
-    <input type="password" id="passInput" value="emcode" placeholder="password">
+    <input type="password" id="passInput" value="emcode" placeholder="password" style="width:100px">
+    <label>Teltonika IMEI</label>
+    <input type="text" id="imeiTelInput" value="" placeholder="optional" style="width:150px">
+    <label>Ruptela IMEI</label>
+    <input type="text" id="imeiRupInput" value="" placeholder="optional" style="width:150px">
     <button class="btn btn-run" id="btnRun" onclick="runTests()">Run All Tests</button>
   </div>
 
@@ -628,9 +640,13 @@ async function runTests() {
 
   const email = document.getElementById('emailInput').value.trim();
   const pass = document.getElementById('passInput').value;
+  const imeiTel = document.getElementById('imeiTelInput').value.trim();
+  const imeiRup = document.getElementById('imeiRupInput').value.trim();
   let url = '/api/run?host='+encodeURIComponent(host);
   if (email) url += '&email='+encodeURIComponent(email);
   if (pass) url += '&password='+encodeURIComponent(pass);
+  if (imeiTel) url += '&imei_tel='+encodeURIComponent(imeiTel);
+  if (imeiRup) url += '&imei_rup='+encodeURIComponent(imeiRup);
   await fetch(url, {method:'POST'});
 
   if (pollInterval) clearInterval(pollInterval);
