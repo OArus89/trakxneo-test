@@ -112,6 +112,14 @@ func Load(target string) (*Config, error) {
 		cfg.Dragonfly.Host = hostOverride
 	}
 
+	// Allow overriding auth credentials
+	if email := os.Getenv("AUTH_EMAIL"); email != "" {
+		cfg.Auth.Username = email
+	}
+	if pw := os.Getenv("AUTH_PASSWORD"); pw != "" {
+		cfg.Auth.Password = pw
+	}
+
 	return &cfg, nil
 }
 

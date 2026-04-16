@@ -124,8 +124,10 @@ func handleRun(w http.ResponseWriter, r *http.Request) {
 	if host == "" {
 		host = "192.168.1.9"
 	}
+	email := r.URL.Query().Get("email")
+	password := r.URL.Query().Get("password")
 
-	go runTests(host)
+	go runTests(host, email, password)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"ok": true, "host": host})
@@ -205,14 +207,19 @@ func handleHistoryDetail(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "not found", 404)
 }
 
-func runTests(host string) {
+func runTests(host, email, password string) {
 	started := time.Now()
 
-	// Build env.yaml override via TARGET_HOST env var
-	// The config loader checks TARGET_HOST to override the host
 	cmd := exec.Command("go", "test", "./scenarios/", "-v", "-timeout=5m", "-count=1", "-json")
 	cmd.Dir = "/opt/trakxneo-tests"
-	cmd.Env = append(os.Environ(), "TARGET=trakxneo", "TARGET_HOST="+host)
+	env := append(os.Environ(), "TARGET=trakxneo", "TARGET_HOST="+host)
+	if email != "" {
+		env = append(env, "AUTH_EMAIL="+email)
+	}
+	if password != "" {
+		env = append(env, "AUTH_PASSWORD="+password)
+	}
+	cmd.Env = env
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -419,6 +426,10 @@ var indexTmpl = template.Must(template.New("index").Parse(`<!DOCTYPE html>
   <div class="controls">
     <label>Target IP</label>
     <input type="text" id="hostInput" value="192.168.1.9" placeholder="192.168.1.9">
+    <label>Email</label>
+    <input type="text" id="emailInput" value="admin@admin" placeholder="admin@admin">
+    <label>Password</label>
+    <input type="password" id="passInput" value="emcode" placeholder="password">
     <button class="btn btn-run" id="btnRun" onclick="runTests()">Run All Tests</button>
   </div>
 
@@ -615,7 +626,12 @@ async function runTests() {
   document.getElementById('bar').style.display = 'none';
   switchTab('current');
 
-  await fetch('/api/run?host='+encodeURIComponent(host), {method:'POST'});
+  const email = document.getElementById('emailInput').value.trim();
+  const pass = document.getElementById('passInput').value;
+  let url = '/api/run?host='+encodeURIComponent(host);
+  if (email) url += '&email='+encodeURIComponent(email);
+  if (pass) url += '&password='+encodeURIComponent(pass);
+  await fetch(url, {method:'POST'});
 
   if (pollInterval) clearInterval(pollInterval);
   pollInterval = setInterval(async () => {
