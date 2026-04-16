@@ -102,6 +102,16 @@ func Load(target string) (*Config, error) {
 		return nil, fmt.Errorf("unknown environment %q (available: %v)", target, keys(ef.Environments))
 	}
 
+	// Allow overriding the host IP via TARGET_HOST env var
+	if hostOverride := os.Getenv("TARGET_HOST"); hostOverride != "" {
+		cfg.Host = hostOverride
+		cfg.API.BaseURL = fmt.Sprintf("http://%s:%d", hostOverride, cfg.API.Port)
+		cfg.WebSocket.URL = fmt.Sprintf("wss://%s:%d/ws", hostOverride, cfg.WebSocket.Port)
+		cfg.Postgres.Host = hostOverride
+		cfg.ClickHouse.Host = hostOverride
+		cfg.Dragonfly.Host = hostOverride
+	}
+
 	return &cfg, nil
 }
 
