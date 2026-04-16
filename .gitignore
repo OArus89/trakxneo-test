@@ -1,4 +1,7 @@
-report/
+report/index.html
+report/*.json
+report/*.xml
 *.out
 *.json
 !config/env.yaml
+!report/generate.go

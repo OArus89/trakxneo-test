@@ -19,14 +19,12 @@ test-v:
 test-one:
 	TARGET=$(TARGET) go test ./scenarios/ -v -run $(SCENARIO) -timeout=5m -count=1
 
-# Generate JUnit XML + coverage report
+# Run tests and generate HTML report
 report:
 	@mkdir -p report
-	TARGET=$(TARGET) go test ./scenarios/ -v -timeout=5m -count=1 -json 2>&1 | tee report/raw.json
-	@command -v gotestsum >/dev/null 2>&1 && \
-		gotestsum --junitfile report/junit.xml --raw-command cat report/raw.json || \
-		echo "Install gotestsum for XML reports: go install gotest.tools/gotestsum@latest"
-	@echo "Report: report/junit.xml"
+	TARGET=$(TARGET) go test ./scenarios/ -v -timeout=5m -count=1 -json 2>&1 | \
+		go run ./report/generate.go
+	@echo "Open report/index.html to view results"
 
 # Lint
 lint:
