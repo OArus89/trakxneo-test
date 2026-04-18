@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/OArus89/trakxneo-test/checks"
+	"github.com/stretchr/testify/require"
 	"github.com/OArus89/trakxneo-test/clients"
 	"github.com/OArus89/trakxneo-test/config"
 )
@@ -81,4 +82,21 @@ func waitFor(t *testing.T, timeout time.Duration, fn func() bool) {
 // decodeBody decodes JSON response body into target struct.
 func decodeBody(body io.Reader, target any) error {
 	return json.NewDecoder(body).Decode(target)
+}
+
+
+func apiCreate(t *testing.T, e *testEnv, path string, body map[string]any) map[string]any {
+	t.Helper()
+	resp, err := e.api.Raw("POST", path, body)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		b, _ := io.ReadAll(resp.Body)
+		t.Logf("create %s returned %d: %s", path, resp.StatusCode, b)
+		return map[string]any{}
+	}
+	var r map[string]any
+	b, _ := io.ReadAll(resp.Body)
+	json.Unmarshal(b, &r)
+	return r
 }
