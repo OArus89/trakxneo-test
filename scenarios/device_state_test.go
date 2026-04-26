@@ -46,10 +46,12 @@ func TestDeviceStateKeys(t *testing.T) {
 		assert.NotNil(t, ops["last_seen"])
 	})
 
-	t.Run("device_timestamp", func(t *testing.T) {
-		exists, err := e.dragonfly.KeyExists("device:ts:" + imei)
+	t.Run("device_last_seen_present", func(t *testing.T) {
+		// Schema 2026-04+: the legacy `device:ts:{imei}` STRING was rolled
+		// into the unified `dev:{imei}` HASH as the `last_seen` field.
+		hasField, err := e.dragonfly.HasDeviceField(imei, "last_seen")
 		require.NoError(t, err)
-		assert.True(t, exists, "device:ts key should exist")
+		assert.True(t, hasField, "dev:{imei}.last_seen should be populated")
 	})
 }
 

@@ -154,17 +154,15 @@ func buildCodec8Record(lat, lon float64, speed, heading int, ignition, movement 
 	buf = append(buf, 0xF0, ioMov)   // 240 = movement
 	buf = append(buf, 0x15, 0x04)    // 21 = GSM signal (4)
 
-	// 2-byte IOs: ext_voltage(66)
-	buf = append(buf, 0x01)
-	binary.BigEndian.PutUint16(b2, 66) // IO ID
-	buf = append(buf, b2...)
+	// 2-byte IOs: ext_voltage(66) — Codec 8 basic uses 1-byte IO IDs
+	buf = append(buf, 0x01)        // count 1
+	buf = append(buf, 0x42)        // IO 66 = ext voltage
 	binary.BigEndian.PutUint16(b2, uint16(extMV))
 	buf = append(buf, b2...)
 
-	// 4-byte IOs: odometer(16)
-	buf = append(buf, 0x01)
-	binary.BigEndian.PutUint16(b2, 16) // IO ID — using 2 bytes for consistency
-	buf = append(buf, 0x00, 0x10)      // IO 16
+	// 4-byte IOs: odometer(16) — Codec 8 basic uses 1-byte IO IDs
+	buf = append(buf, 0x01)        // count 1
+	buf = append(buf, 0x10)        // IO 16 = total odometer
 	binary.BigEndian.PutUint32(b4, uint32(odometerM))
 	buf = append(buf, b4...)
 

@@ -17,7 +17,7 @@ func TestVehicleCalendars_CRUD(t *testing.T) {
 	orgID := getOrgID(t, e)
 
 	// Setup vehicle
-	r := apiCreate(t, e, "/api/v1/rental/vehicle-classes", map[string]any{"name": "Cal Test", "org_id": orgID})
+	r := apiCreate(t, e, "/api/v1/rental/vehicle-classes", map[string]any{"name": "Cal Test", "code": "CAL-CLS", "vehicle_type": "car", "org_id": orgID})
 	classID, _ := r["id"].(string)
 	r = apiCreate(t, e, "/api/v1/rental/vehicles", map[string]any{
 		"org_id": orgID, "vehicle_class_id": classID,
@@ -93,7 +93,7 @@ func TestBookingOptions_CRUD(t *testing.T) {
 	}
 
 	// Create minimal booking chain
-	r := apiCreate(t, e, "/api/v1/rental/vehicle-classes", map[string]any{"name": "Opt Test", "org_id": orgID})
+	r := apiCreate(t, e, "/api/v1/rental/vehicle-classes", map[string]any{"name": "Opt Test", "code": "OPT-CLS", "vehicle_type": "car", "org_id": orgID})
 	classID, _ := r["id"].(string)
 	r = apiCreate(t, e, "/api/v1/rental/vehicles", map[string]any{
 		"org_id": orgID, "vehicle_class_id": classID,
@@ -169,7 +169,7 @@ func TestViolations_CRUD(t *testing.T) {
 	}
 
 	// Create booking for violation
-	r := apiCreate(t, e, "/api/v1/rental/vehicle-classes", map[string]any{"name": "Viol Test", "org_id": orgID})
+	r := apiCreate(t, e, "/api/v1/rental/vehicle-classes", map[string]any{"name": "Viol Test", "code": "VIOL-CLS", "vehicle_type": "car", "org_id": orgID})
 	classID, _ := r["id"].(string)
 	r = apiCreate(t, e, "/api/v1/rental/vehicles", map[string]any{
 		"org_id": orgID, "vehicle_class_id": classID,

@@ -45,9 +45,11 @@ func TestOfflineTransition_ConnectivityStates(t *testing.T) {
 	})
 
 	t.Run("device_timestamp_fresh", func(t *testing.T) {
-		exists, err := e.dragonfly.KeyExists("device:ts:" + imei)
+		// Schema 2026-04+: legacy `device:ts:{imei}` collapsed into the
+		// `last_seen` field on the unified `dev:{imei}` HASH.
+		hasField, err := e.dragonfly.HasDeviceField(imei, "last_seen")
 		require.NoError(t, err)
-		assert.True(t, exists)
+		assert.True(t, hasField, "dev:{imei}.last_seen should be populated and non-empty")
 	})
 
 	// NOTE: Testing standby/offline transitions would require waiting 5+ minutes.

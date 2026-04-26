@@ -27,7 +27,7 @@ func TestBookingFullStateMachine(t *testing.T) {
 
 	// Setup: vehicle class
 	t.Run("setup_vehicle_class", func(t *testing.T) {
-		body := map[string]any{"name": "SM Test Class", "org_id": orgID}
+		body := map[string]any{"name": "SM Test Class", "code": "SM-CLASS", "vehicle_type": "car", "org_id": orgID}
 		r := apiCreate(t, e, "/api/v1/rental/vehicle-classes", body)
 		vehicleClassID, _ = r["id"].(string)
 		require.NotEmpty(t, vehicleClassID)
@@ -36,7 +36,7 @@ func TestBookingFullStateMachine(t *testing.T) {
 	// Setup: vehicle
 	t.Run("setup_vehicle", func(t *testing.T) {
 		body := map[string]any{
-			"org_id": orgID, "vehicle_class_id": vehicleClassID,
+			"org_id": orgID, "vehicle_class_id": vehicleClassID, "vehicle_type": "car",
 			"plate": "SM-TEST-1", "make": "Test", "model": "SM",
 			"year": 2024, "color": "blue", "status": "available",
 		}
@@ -76,8 +76,8 @@ func TestBookingFullStateMachine(t *testing.T) {
 		body := map[string]any{
 			"org_id": orgID, "vehicle_id": vehicleID,
 			"customer_id": customerID, "tariff_id": tariffID,
-			"planned_start": time.Now().Format(time.RFC3339),
-			"planned_end":   time.Now().Add(24 * time.Hour).Format(time.RFC3339),
+			"pickup_scheduled_at": time.Now().Format(time.RFC3339),
+			"return_scheduled_at":   time.Now().Add(24 * time.Hour).Format(time.RFC3339),
 		}
 		r := apiCreate(t, e, "/api/v1/rental/bookings", body)
 		bookingID, _ = r["id"].(string)
@@ -138,11 +138,11 @@ func TestBookingCancelFromReserved(t *testing.T) {
 	}
 
 	// Quick setup — reuse existing entities if possible
-	r := apiCreate(t, e, "/api/v1/rental/vehicle-classes", map[string]any{"name": "Cancel Test", "org_id": orgID})
+	r := apiCreate(t, e, "/api/v1/rental/vehicle-classes", map[string]any{"name": "Cancel Test", "code": "CANCEL-CLS", "vehicle_type": "car", "org_id": orgID})
 	classID, _ := r["id"].(string)
 	r = apiCreate(t, e, "/api/v1/rental/vehicles", map[string]any{
 		"org_id": orgID, "vehicle_class_id": classID,
-		"plate": "CANCEL-1", "make": "Test", "model": "C", "status": "available",
+		"vehicle_type": "car", "plate": "CANCEL-1", "make": "Test", "model": "C", "status": "available",
 	})
 	vID, _ := r["id"].(string)
 

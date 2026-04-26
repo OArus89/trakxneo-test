@@ -35,7 +35,7 @@ func TestCRC16_KnownVectors(t *testing.T) {
 		{"single_byte_0x00", "00", 0x0000},
 		{"single_byte_0x01", "01", 0xC0C1},
 		{"ascii_123456789", "313233343536373839", 0xBB3D},
-		{"teltonika_codec8_minimal", "080100000000", 0x3BCA},
+		{"teltonika_codec8_minimal", "080100000000", 0x883C},
 	}
 
 	for _, v := range vectors {

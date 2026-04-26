@@ -26,7 +26,7 @@ func TestActivityLog_LoginRecorded(t *testing.T) {
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
 	var result struct {
-		Items []map[string]any `json:"items"`
+		Items []map[string]any `json:"entries"`
 	}
 	b, _ := io.ReadAll(resp.Body)
 	json.Unmarshal(b, &result)
@@ -74,7 +74,7 @@ func TestActivityLog_DeviceCreateRecorded(t *testing.T) {
 	}
 
 	var result struct {
-		Items []map[string]any `json:"items"`
+		Items []map[string]any `json:"entries"`
 	}
 	b, _ := io.ReadAll(resp.Body)
 	json.Unmarshal(b, &result)
