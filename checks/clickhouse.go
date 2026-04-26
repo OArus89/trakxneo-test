@@ -17,6 +17,9 @@ type ClickHouse struct {
 
 func NewClickHouse(cfg *config.Config) (*ClickHouse, error) {
 	conn, err := clickhouse.Open(&clickhouse.Options{
+		// Tunnel forwards 28123→prod 8123 (HTTP). Native protocol on 9000
+		// is not exposed; explicitly select HTTP so the handshake matches.
+		Protocol: clickhouse.HTTP,
 		Addr: []string{fmt.Sprintf("%s:%d", cfg.ClickHouse.Host, cfg.ClickHouse.Port)},
 		Settings: clickhouse.Settings{
 			"max_execution_time": 30,
@@ -43,10 +46,14 @@ func (c *ClickHouse) TelemetryCount(deviceID string, since time.Time) (uint64, e
 }
 
 // LatestTelemetry returns the most recent telemetry point for a device.
+// Note: production ClickHouse columns are `lat`/`lon` (not latitude/longitude),
+// `heading` is Float32 (not uint16), and `ignition`/`fix_valid` are UInt8
+// (0/1) — scan accordingly. The returned map exposes the legacy aliases the
+// scenario tests still assert against.
 func (c *ClickHouse) LatestTelemetry(deviceID string) (map[string]any, error) {
 	ctx := context.Background()
 	rows, err := c.conn.Query(ctx,
-		fmt.Sprintf(`SELECT device_id, timestamp, latitude, longitude, speed, heading,
+		fmt.Sprintf(`SELECT device_id, timestamp, lat, lon, speed, heading,
 		        ignition, fix_valid
 		 FROM %s.gps_telemetry
 		 WHERE device_id = ?
@@ -63,9 +70,8 @@ func (c *ClickHouse) LatestTelemetry(deviceID string) (map[string]any, error) {
 	var devID string
 	var ts time.Time
 	var lat, lon float64
-	var speed float32
-	var hdg uint16
-	var ign, fix bool
+	var speed, hdg float32
+	var ign, fix uint8
 
 	if err := rows.Scan(&devID, &ts, &lat, &lon, &speed, &hdg, &ign, &fix); err != nil {
 		return nil, err
@@ -78,7 +84,7 @@ func (c *ClickHouse) LatestTelemetry(deviceID string) (map[string]any, error) {
 		"longitude": lon,
 		"speed":     speed,
 		"heading":   hdg,
-		"ignition":  ign,
-		"fix_valid": fix,
+		"ignition":  ign != 0,
+		"fix_valid": fix != 0,
 	}, nil
 }

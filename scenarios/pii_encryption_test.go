@@ -2,14 +2,28 @@ package scenarios
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
-	
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+var piiPhoneCounter int64
+
+// uniquePhone returns a UAE-format mobile that's unique within the process —
+// previously the PII tests reused literals like +971500099001, so re-runs
+// hit a UNIQUE constraint and the suite stayed FAIL forever after the
+// first run.
+func uniquePhone() string {
+	n := atomic.AddInt64(&piiPhoneCounter, 1)
+	ms := time.Now().UnixMilli() % 1_000_000
+	return fmt.Sprintf("+97150%07d", (ms*7+n)%10_000_000)
+}
 
 // TestPII_EncryptionRoundtrip verifies that PII fields (national_id, license)
 // are encrypted at rest but returned decrypted via API.
@@ -23,7 +37,7 @@ func TestPII_EncryptionRoundtrip(t *testing.T) {
 	var personID string
 	t.Run("create_person_with_pii", func(t *testing.T) {
 		body := map[string]any{
-			"phone":              "+971500099001",
+			"phone":              uniquePhone(),
 			"first_name":         "PII",
 			"last_name":          "Test",
 			"national_id_type":   "emirates_id",
@@ -126,7 +140,7 @@ func TestPII_EmptyFieldsHandled(t *testing.T) {
 	e := setup(t)
 
 	body := map[string]any{
-		"phone":      "+971500099002",
+		"phone":      uniquePhone(),
 		"first_name": "NoPII",
 		"last_name":  "Test",
 	}

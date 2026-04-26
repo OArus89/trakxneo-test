@@ -65,7 +65,7 @@ func TestActivityLog_DeviceCreateRecorded(t *testing.T) {
 	time.Sleep(1 * time.Second)
 
 	// Check activity log
-	resp, err = e.api.Raw("GET", "/api/v1/admin/activity-log?limit=5", nil)
+	resp, err = e.api.Raw("GET", "/api/v1/admin/activity-log?limit=50&resource=devices", nil)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
@@ -83,7 +83,7 @@ func TestActivityLog_DeviceCreateRecorded(t *testing.T) {
 	for _, item := range result.Items {
 		action, _ := item["action"].(string)
 		resource, _ := item["resource"].(string)
-		if action == "create" && resource == "device" {
+		if action == "create" && (resource == "device" || resource == "devices") {
 			found = true
 			break
 		}

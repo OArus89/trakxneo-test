@@ -198,7 +198,7 @@ func (s *RuptelaSession) SendRecord(lat, lon float64, speed, heading int, igniti
 	frame := make([]byte, 2+len(payload)+2)
 	binary.BigEndian.PutUint16(frame[:2], uint16(len(payload)))
 	copy(frame[2:], payload)
-	crc := crc16IBM(payload)
+	crc := crc16Kermit(payload)
 	binary.BigEndian.PutUint16(frame[2+len(payload):], crc)
 
 	if _, err := s.conn.Write(frame); err != nil {
@@ -221,23 +221,47 @@ func (s *RuptelaSession) Close() {
 }
 
 func buildRuptelaPayload(imei string, lat, lon float64, speed, heading int, ignition, movement bool, powerMV, battMV, odometerM int) []byte {
-	// Ruptela Extended Records: cmd(1) + device_id(8) + record_count(1) + records
+	// Ruptela wire format (per internal/protocol/ruptela/parser.go):
+	//   [length:2 BE][IMEI:8][cmd:1][payload:N][CRC16:2 BE]
+	// IMEI is BEFORE cmd, not after it. The 8 IMEI bytes are the
+	// device's decimal digits parsed as hex (so "999000000000037" →
+	// 0x09 0x99 0x00 0x00 0x00 0x00 0x00 0x37); the parser pulls
+	// them back out via fmt.Sprintf("%016X", uint64(bytes)).
+	//
+	// Layout returned by this function (everything between length and CRC):
+	//   IMEI(8) + cmd(1) + record_count(1) + records
+	// Record (Cmd 1, legacy 1-byte IO IDs):
+	//   ts(4) + tsExt(1) + priority(1) + lon(4) + lat(4) + alt(2) + heading(2) +
+	//   sats(1) + speed(2) + hdop(1) + eventIOID(1) +
+	//   N1(1) + (id1 + val1)×N1 +
+	//   N2(1) + (id1 + val2)×N2 +
+	//   N4(1) + (id1 + val4)×N4 +
+	//   N8(1) + (id1 + val8)×N8
+	// IO IDs are ONE byte in Cmd 1 (Cmd 68 uses two). Each value-size group
+	// is delimited by a 1-byte count, NOT by a per-element length prefix.
 	var buf []byte
 
-	// Command: 0x01 = Extended Records
-	buf = append(buf, 0x01)
-
-	// Device IMEI as uint64
+	// IMEI: 8 bytes, BigEndian uint64 of the decimal IMEI value.
+	// Production parser at internal/protocol/ruptela/parser.go:90-96 reads:
+	//   imei := binary.BigEndian.Uint64(data[0:8])
+	//   IMEIStr := fmt.Sprintf("%015d", imei)
+	// — a 15-digit zero-padded decimal, NOT a hex format.
 	var imeiNum uint64
 	fmt.Sscanf(imei, "%d", &imeiNum)
 	b8 := make([]byte, 8)
 	binary.BigEndian.PutUint64(b8, imeiNum)
 	buf = append(buf, b8...)
 
-	// 1 record
+	// Cmd 1 = legacy Extended Records (1-byte IO IDs).
 	buf = append(buf, 0x01)
 
-	// Record: timestamp(4) + timestamp_ext(1) + priority(1) + lon(4) + lat(4) + alt(2) + heading(2) + sats(1) + speed(2) + hdop(1) + io_count(1) + ios
+	// Payload header: [RecordsLeft:1][NumRecords:1].
+	// RecordsLeft = how many records the device still has buffered after
+	// this packet (0 = none). NumRecords = records in this packet.
+	buf = append(buf, 0x00) // recordsLeft = 0 (no more pending)
+	buf = append(buf, 0x01) // numRecords = 1
+
+	// Record header.
 	ts := uint32(time.Now().Unix())
 	b4 := make([]byte, 4)
 	binary.BigEndian.PutUint32(b4, ts)
@@ -245,7 +269,7 @@ func buildRuptelaPayload(imei string, lat, lon float64, speed, heading int, igni
 	buf = append(buf, 0x00) // timestamp extension
 	buf = append(buf, 0x00) // priority
 
-	// GPS: lon/lat as int32 (degrees * 1e7)
+	// GPS: lon/lat as int32 (degrees × 1e7). Order is lon-then-lat per spec.
 	lonInt := int32(lon * 1e7)
 	latInt := int32(lat * 1e7)
 	binary.BigEndian.PutUint32(b4, uint32(lonInt))
@@ -261,50 +285,46 @@ func buildRuptelaPayload(imei string, lat, lon float64, speed, heading int, igni
 	buf = append(buf, 10) // satellites
 	binary.BigEndian.PutUint16(b2, uint16(speed))
 	buf = append(buf, b2...)
-	buf = append(buf, 15) // hdop * 10
+	buf = append(buf, 15) // HDOP × 10
+	buf = append(buf, 0)  // eventIOID (no event)
 
-	// IO elements: count(1) + [id(2) + value(variable)]
-	ioCount := byte(4)
-	buf = append(buf, ioCount)
-
-	// IO 5 = ignition (1 byte)
-	binary.BigEndian.PutUint16(b2, 5)
-	buf = append(buf, b2...)
-	buf = append(buf, 0x01) // value length
+	// 1-byte value group: IO 5 (ignition) + IO 173 (movement).
+	// Cmd 1 IO IDs are 1 byte and 173 fits, but >255 would not — those
+	// IOs are only valid in Cmd 68 (extended).
+	buf = append(buf, 0x02) // N1 = 2
+	buf = append(buf, 5)
 	if ignition {
 		buf = append(buf, 0x01)
 	} else {
 		buf = append(buf, 0x00)
 	}
-
-	// IO 173 = movement (1 byte)
-	binary.BigEndian.PutUint16(b2, 173)
-	buf = append(buf, b2...)
-	buf = append(buf, 0x01)
+	buf = append(buf, 173)
 	if movement {
 		buf = append(buf, 0x01)
 	} else {
 		buf = append(buf, 0x00)
 	}
 
-	// IO 29 = power voltage (2 bytes, mV)
-	binary.BigEndian.PutUint16(b2, 29)
-	buf = append(buf, b2...)
-	buf = append(buf, 0x02)
+	// 2-byte value group: IO 29 (external power supply, mV).
+	buf = append(buf, 0x01) // N2 = 1
+	buf = append(buf, 29)
 	binary.BigEndian.PutUint16(b2, uint16(powerMV))
 	buf = append(buf, b2...)
 
-	// IO 65 = odometer (4 bytes)
-	binary.BigEndian.PutUint16(b2, 65)
-	buf = append(buf, b2...)
-	buf = append(buf, 0x04)
+	// 4-byte value group: IO 65 (virtual odometer, m).
+	buf = append(buf, 0x01) // N4 = 1
+	buf = append(buf, 65)
 	binary.BigEndian.PutUint32(b4, uint32(odometerM))
 	buf = append(buf, b4...)
+
+	// 8-byte value group: empty.
+	buf = append(buf, 0x00) // N8 = 0
 
 	return buf
 }
 
-// crc16IBM computes CRC-16/IBM (polynomial 0x8005, init 0, reflected).
+// crc16IBM computes CRC-16/IBM (polynomial 0x8005, init 0, reflected) —
+// used by Teltonika Codec 8.
 func crc16IBM(data []byte) uint16 {
 	var crc uint16
 	for _, b := range data {
@@ -312,6 +332,27 @@ func crc16IBM(data []byte) uint16 {
 		for i := 0; i < 8; i++ {
 			if crc&1 != 0 {
 				crc = (crc >> 1) ^ 0xA001
+			} else {
+				crc >>= 1
+			}
+		}
+	}
+	return crc
+}
+
+// crc16Kermit computes CRC-16/Kermit (CRC-CCITT reflected, poly 0x8408,
+// init 0x0000) — used by Ruptela. Matches
+// internal/protocol/ruptela/crc.go in the main repo; the gateway framer
+// rejects packets whose CRC doesn't validate, so this must stay in
+// lock-step with production.
+func crc16Kermit(data []byte) uint16 {
+	const poly = 0x8408
+	var crc uint16
+	for _, b := range data {
+		crc ^= uint16(b)
+		for i := 0; i < 8; i++ {
+			if crc&1 != 0 {
+				crc = (crc >> 1) ^ poly
 			} else {
 				crc >>= 1
 			}
